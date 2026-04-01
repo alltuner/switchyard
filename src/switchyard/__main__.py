@@ -6,16 +6,14 @@ from granian import Granian
 from granian.constants import HTTPModes, Interfaces, Loops
 from granian.http import HTTP1Settings
 
-from switchyard.config import Settings
+PORT = 5050
 
 
 def main() -> None:
-    settings = Settings()
-
     server = Granian(
         target="switchyard.app:app",
         address="0.0.0.0",
-        port=settings.port,
+        port=PORT,
         interface=Interfaces.ASGI,
         loop=Loops.uvloop,
         http=HTTPModes.http1,

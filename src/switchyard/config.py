@@ -10,6 +10,5 @@ class Settings(BaseSettings):
 
     data_dir: str = "./data"
     upstream: str = ""
-    port: int = 5050
     sync_interval: int = 10
     manifest_ttl: int = 300

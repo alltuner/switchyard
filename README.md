@@ -82,7 +82,6 @@ All configuration is via environment variables with the `SWITCHYARD_` prefix:
 |----------|---------|-------------|
 | `SWITCHYARD_DATA_DIR` | `./data` | Directory for blobs, manifests, and sync queue |
 | `SWITCHYARD_UPSTREAM` | (empty) | Central registry URL. Empty = local-only mode |
-| `SWITCHYARD_PORT` | `5050` | Listen port |
 | `SWITCHYARD_SYNC_INTERVAL` | `10` | Seconds between sync queue scans |
 | `SWITCHYARD_MANIFEST_TTL` | `300` | Seconds before re-fetching a cached tag manifest from upstream |
 
