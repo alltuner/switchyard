@@ -1,0 +1,16 @@
+# ABOUTME: Docker Compose for running switchyard locally.
+# ABOUTME: Persists registry data in a named volume.
+services:
+  switchyard:
+    build: .
+    ports:
+      - "5050:5050"
+    volumes:
+      - switchyard-data:/data
+    environment:
+      SWITCHYARD_UPSTREAM: ""  # set to your central registry URL, e.g. http://central:5000
+      SWITCHYARD_SYNC_INTERVAL: "10"
+    restart: unless-stopped
+
+volumes:
+  switchyard-data:
