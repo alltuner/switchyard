@@ -23,7 +23,7 @@ log = logger.bind(component="switchyard")
 
 @asynccontextmanager
 async def lifespan(app: Starlette) -> AsyncIterator[None]:
-    settings = Settings.from_env()
+    settings = Settings()
     setup_logging()
 
     storage = Storage(settings.data_dir)
