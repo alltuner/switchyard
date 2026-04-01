@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/alltuner/switchyard/compare/v0.1.2...v0.1.3) (2026-04-01)
+
+
+### Miscellaneous Chores
+
+* **deps:** update actions/checkout action to v6 ([#10](https://github.com/alltuner/switchyard/issues/10)) ([2c357a1](https://github.com/alltuner/switchyard/commit/2c357a130a52680c8e8b0f89ca496d62945ce31a))
+* **deps:** update docker/login-action action to v4 ([#11](https://github.com/alltuner/switchyard/issues/11)) ([9e5d0c8](https://github.com/alltuner/switchyard/commit/9e5d0c8f34268f50d73078ea2682eed004a6b3aa))
+
 ## [0.1.2](https://github.com/alltuner/switchyard/compare/v0.1.1...v0.1.2) (2026-04-01)
 
 
