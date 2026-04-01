@@ -4,9 +4,9 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --locked --no-install-project
+RUN uv sync --no-dev --frozen --no-install-project
 COPY src/ src/
-RUN uv sync --no-dev --locked --no-editable
+RUN uv sync --no-dev --frozen --no-editable
 
 FROM python:3.14-slim-bookworm
 
