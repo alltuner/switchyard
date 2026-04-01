@@ -6,7 +6,6 @@ import json
 
 from starlette.testclient import TestClient
 
-
 MANIFEST_CT = "application/vnd.docker.distribution.manifest.v2+json"
 
 

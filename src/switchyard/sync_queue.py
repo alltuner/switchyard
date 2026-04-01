@@ -90,7 +90,7 @@ class SyncQueue:
 
     async def mark_failed(self, marker: SyncMarker) -> None:
         marker.retries += 1
-        backoff = min(5 * (2 ** marker.retries), MAX_BACKOFF_SECONDS)
+        backoff = min(5 * (2**marker.retries), MAX_BACKOFF_SECONDS)
         from datetime import timedelta
 
         marker.next_attempt = (datetime.now(UTC) + timedelta(seconds=backoff)).isoformat()

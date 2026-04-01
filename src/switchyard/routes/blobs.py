@@ -2,7 +2,7 @@
 # ABOUTME: Handles the POST/PATCH/PUT upload flow and GET/HEAD for retrieval.
 from __future__ import annotations
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
@@ -69,6 +69,7 @@ async def get_blob(request: Request) -> Response:
     # Proxy from upstream and cache locally
     upstream = _get_upstream(request)
     if upstream:
+
         async def _proxy_and_cache() -> AsyncIterator[bytes]:
             upload_id = await storage.create_upload()
             try:
@@ -106,7 +107,7 @@ async def start_upload(request: Request) -> Response:
             if not await storage.verify_upload_digest(upload_id, digest):
                 await storage.delete_upload(upload_id)
                 return Response(status_code=400, content="Digest mismatch")
-            size = await storage.store_blob_from_upload(upload_id, digest)
+            await storage.store_blob_from_upload(upload_id, digest)
             return Response(
                 status_code=201,
                 headers={
@@ -179,7 +180,7 @@ async def complete_upload(request: Request) -> Response:
         await storage.delete_upload(upload_id)
         return Response(status_code=400, content="Digest mismatch")
 
-    size = await storage.store_blob_from_upload(upload_id, digest)
+    await storage.store_blob_from_upload(upload_id, digest)
     return Response(
         status_code=201,
         headers={

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
-
 MANIFEST_CT = "application/vnd.docker.distribution.manifest.v2+json"
 
 
@@ -67,9 +66,7 @@ def test_head_manifest(registry: TestClient) -> None:
     assert resp.headers["Content-Length"] == str(len(body))
 
 
-def test_put_manifest_creates_sync_marker(
-    registry: TestClient, storage_path: Path
-) -> None:
+def test_put_manifest_creates_sync_marker(registry: TestClient, storage_path: Path) -> None:
     body = _sample_manifest()
     registry.put(
         "/v2/myapp/manifests/latest",

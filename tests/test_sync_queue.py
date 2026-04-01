@@ -122,13 +122,15 @@ async def test_marker_path_sanitizes_digest_reference(tmp_path: Path) -> None:
 
 async def test_marker_is_ready() -> None:
     past = SyncMarker(
-        name="a", reference="b",
+        name="a",
+        reference="b",
         next_attempt=(datetime.now(UTC) - timedelta(seconds=1)).isoformat(),
     )
     assert past.is_ready
 
     future = SyncMarker(
-        name="a", reference="b",
+        name="a",
+        reference="b",
         next_attempt=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
     )
     assert not future.is_ready

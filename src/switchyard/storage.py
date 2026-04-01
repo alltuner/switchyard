@@ -6,8 +6,8 @@ import asyncio
 import hashlib
 import shutil
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator
 
 from loguru import logger
 
@@ -204,7 +204,12 @@ class Storage:
 
             await asyncio.to_thread(_write_digest)
 
-        log.info("Stored manifest {name}:{ref} ({digest})", name=name, ref=reference, digest=digest[:19])
+        log.info(
+            "Stored manifest {name}:{ref} ({digest})",
+            name=name,
+            ref=reference,
+            digest=digest[:19],
+        )
         return digest
 
     async def list_repos(self) -> list[str]:

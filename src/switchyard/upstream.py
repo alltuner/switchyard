@@ -2,7 +2,7 @@
 # ABOUTME: Handles pushing blobs/manifests and proxying pull requests.
 from __future__ import annotations
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 from loguru import logger
@@ -94,19 +94,19 @@ class UpstreamClient:
         resp = await self._client.head(f"/v2/{name}/manifests/{reference}")
         return resp.status_code == 200
 
-    async def pull_manifest(
-        self, name: str, reference: str
-    ) -> tuple[bytes, str, str] | None:
+    async def pull_manifest(self, name: str, reference: str) -> tuple[bytes, str, str] | None:
         """Pull a manifest. Returns (body, content_type, digest) or None."""
         resp = await self._client.get(
             f"/v2/{name}/manifests/{reference}",
             headers={
-                "Accept": ", ".join([
-                    "application/vnd.docker.distribution.manifest.v2+json",
-                    "application/vnd.oci.image.manifest.v1+json",
-                    "application/vnd.docker.distribution.manifest.list.v2+json",
-                    "application/vnd.oci.image.index.v1+json",
-                ]),
+                "Accept": ", ".join(
+                    [
+                        "application/vnd.docker.distribution.manifest.v2+json",
+                        "application/vnd.oci.image.manifest.v1+json",
+                        "application/vnd.docker.distribution.manifest.list.v2+json",
+                        "application/vnd.oci.image.index.v1+json",
+                    ]
+                ),
             },
         )
         if resp.status_code == 404:

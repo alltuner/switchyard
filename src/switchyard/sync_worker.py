@@ -29,7 +29,11 @@ async def sync_one(
     # Read the manifest to find referenced blobs
     result = await storage.get_manifest(name, reference)
     if result is None:
-        log.warning("Manifest {name}:{ref} not found locally, removing marker", name=name, ref=reference)
+        log.warning(
+            "Manifest {name}:{ref} not found locally, removing marker",
+            name=name,
+            ref=reference,
+        )
         await queue.mark_done(marker)
         return
 

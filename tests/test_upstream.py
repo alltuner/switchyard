@@ -48,9 +48,7 @@ async def test_push_blob_uploads() -> None:
     respx.post("https://central:5000/v2/myapp/blobs/uploads/").mock(
         return_value=httpx.Response(202, headers={"Location": "/v2/myapp/blobs/uploads/uuid-1"})
     )
-    respx.put(url__regex=r".*/blobs/uploads/uuid-1.*").mock(
-        return_value=httpx.Response(201)
-    )
+    respx.put(url__regex=r".*/blobs/uploads/uuid-1.*").mock(return_value=httpx.Response(201))
 
     client = UpstreamClient("https://central:5000")
     await client.push_blob("myapp", "sha256:abc123", b"blob data")
@@ -65,7 +63,9 @@ async def test_push_manifest() -> None:
     )
     client = UpstreamClient("https://central:5000")
     await client.push_manifest(
-        "myapp", "latest", b'{"schemaVersion": 2}',
+        "myapp",
+        "latest",
+        b'{"schemaVersion": 2}',
         "application/vnd.docker.distribution.manifest.v2+json",
     )
     assert len(respx.calls) == 1
