@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.2](https://github.com/alltuner/switchyard/compare/v0.1.1...v0.1.2) (2026-04-01)
+
+
+### Bug Fixes
+
+* use --frozen in Dockerfile and regenerate lockfile ([#7](https://github.com/alltuner/switchyard/issues/7)) ([4eb3010](https://github.com/alltuner/switchyard/commit/4eb3010481c1c1c293e6d742b4fc19d71aa0f8c3))
+
+
+### Documentation Updates
+
+* add polished README, MIT license, and GitHub funding ([#9](https://github.com/alltuner/switchyard/issues/9)) ([4f91374](https://github.com/alltuner/switchyard/commit/4f9137444861db020371eeb3def31800ea03739f))
+
 ## [0.1.1](https://github.com/alltuner/switchyard/compare/v0.1.0...v0.1.1) (2026-04-01)
 
 
