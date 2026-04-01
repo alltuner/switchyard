@@ -2,14 +2,21 @@
 # ABOUTME: Handles the POST/PATCH/PUT upload flow and GET/HEAD for retrieval.
 from __future__ import annotations
 
+from typing import AsyncIterator
+
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 
 from switchyard.storage import Storage
+from switchyard.upstream import UpstreamClient
 
 
 def _get_storage(request: Request) -> Storage:
     return request.app.state.storage  # type: ignore[no-any-return]
+
+
+def _get_upstream(request: Request) -> UpstreamClient | None:
+    return request.app.state.upstream  # type: ignore[no-any-return]
 
 
 async def head_blob(request: Request) -> Response:
@@ -18,17 +25,28 @@ async def head_blob(request: Request) -> Response:
     digest = request.path_params["digest"]
 
     size = await storage.blob_size(digest)
-    if size is None:
-        return Response(status_code=404)
+    if size is not None:
+        return Response(
+            status_code=200,
+            headers={
+                "Content-Length": str(size),
+                "Docker-Content-Digest": digest,
+                "Content-Type": "application/octet-stream",
+            },
+        )
 
-    return Response(
-        status_code=200,
-        headers={
-            "Content-Length": str(size),
-            "Docker-Content-Digest": digest,
-            "Content-Type": "application/octet-stream",
-        },
-    )
+    # Fall back to upstream
+    upstream = _get_upstream(request)
+    if upstream and await upstream.check_blob(name, digest):
+        return Response(
+            status_code=200,
+            headers={
+                "Docker-Content-Digest": digest,
+                "Content-Type": "application/octet-stream",
+            },
+        )
+
+    return Response(status_code=404)
 
 
 async def get_blob(request: Request) -> Response:
@@ -36,18 +54,42 @@ async def get_blob(request: Request) -> Response:
     name = request.path_params["name"]
     digest = request.path_params["digest"]
 
-    if not await storage.has_blob(digest):
-        return Response(status_code=404)
+    # Serve from local storage
+    if await storage.has_blob(digest):
+        size = await storage.blob_size(digest)
+        return StreamingResponse(
+            storage.stream_blob(digest),
+            media_type="application/octet-stream",
+            headers={
+                "Docker-Content-Digest": digest,
+                "Content-Length": str(size),
+            },
+        )
 
-    size = await storage.blob_size(digest)
-    return StreamingResponse(
-        storage.stream_blob(digest),
-        media_type="application/octet-stream",
-        headers={
-            "Docker-Content-Digest": digest,
-            "Content-Length": str(size),
-        },
-    )
+    # Proxy from upstream and cache locally
+    upstream = _get_upstream(request)
+    if upstream:
+        async def _proxy_and_cache() -> AsyncIterator[bytes]:
+            upload_id = await storage.create_upload()
+            try:
+                async for chunk in upstream.pull_blob(name, digest):
+                    await storage.append_upload(upload_id, chunk)
+                    yield chunk
+                await storage.store_blob_from_upload(upload_id, digest)
+            except Exception:
+                await storage.delete_upload(upload_id)
+                raise
+
+        try:
+            return StreamingResponse(
+                _proxy_and_cache(),
+                media_type="application/octet-stream",
+                headers={"Docker-Content-Digest": digest},
+            )
+        except Exception:
+            pass
+
+    return Response(status_code=404)
 
 
 async def start_upload(request: Request) -> Response:

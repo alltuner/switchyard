@@ -25,6 +25,7 @@ def _make_app(storage: Storage, queue: SyncQueue, settings: Settings) -> Starlet
         app.state.storage = storage
         app.state.queue = queue
         app.state.settings = settings
+        app.state.upstream = None
         yield
 
     routes = [

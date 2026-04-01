@@ -2,9 +2,11 @@
 # ABOUTME: Initializes storage, sync queue, and background sync worker.
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from loguru import logger
 from starlette.applications import Starlette
 from starlette.routing import Route
 
@@ -13,6 +15,10 @@ from switchyard.log import setup_logging
 from switchyard.routes import base, blobs, catalog, manifests
 from switchyard.storage import Storage
 from switchyard.sync_queue import SyncQueue
+from switchyard.sync_worker import run_sync_loop
+from switchyard.upstream import UpstreamClient
+
+log = logger.bind(component="switchyard")
 
 
 @asynccontextmanager
@@ -30,7 +36,30 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
     app.state.queue = queue
     app.state.settings = settings
 
+    sync_task = None
+    upstream = None
+
+    if settings.upstream:
+        upstream = UpstreamClient(settings.upstream)
+        app.state.upstream = upstream
+        sync_task = asyncio.create_task(
+            run_sync_loop(storage, queue, upstream, settings.sync_interval)
+        )
+        log.info("Upstream configured: {}", settings.upstream)
+    else:
+        app.state.upstream = None
+        log.info("No upstream configured, running in local-only mode")
+
     yield
+
+    if sync_task:
+        sync_task.cancel()
+        try:
+            await sync_task
+        except asyncio.CancelledError:
+            pass
+    if upstream:
+        await upstream.close()
 
 
 routes = [
