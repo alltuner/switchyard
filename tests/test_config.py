@@ -1,5 +1,5 @@
-# ABOUTME: Tests for Settings dataclass and environment variable loading.
-# ABOUTME: Verifies defaults and env var overrides.
+# ABOUTME: Tests for Settings and environment variable loading.
+# ABOUTME: Verifies defaults and env var overrides via pydantic-settings.
 import pytest
 
 from switchyard.config import Settings
@@ -21,7 +21,7 @@ def test_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SWITCHYARD_SYNC_INTERVAL", "30")
     monkeypatch.setenv("SWITCHYARD_MANIFEST_TTL", "600")
 
-    settings = Settings.from_env()
+    settings = Settings()
     assert settings.data_dir == "/tmp/registry"
     assert settings.upstream == "https://central:5000"
     assert settings.port == 9090
@@ -32,12 +32,12 @@ def test_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_from_env_partial(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SWITCHYARD_UPSTREAM", "https://other:5000")
 
-    settings = Settings.from_env()
+    settings = Settings()
     assert settings.upstream == "https://other:5000"
     assert settings.port == 5050  # default preserved
 
 
-def test_frozen() -> None:
+def test_immutable() -> None:
     settings = Settings()
-    with pytest.raises(AttributeError):
+    with pytest.raises(Exception):
         settings.port = 9999  # type: ignore[misc]
