@@ -106,7 +106,7 @@ uv run ruff check src/ tests/
 
 ## Tech stack
 
-- Python 3.12+, async throughout
+- Python 3.14+, async throughout
 - [Starlette](https://www.starlette.io/) for the HTTP layer
 - [Granian](https://github.com/emmett-framework/granian) (Rust ASGI server) with uvloop
 - [httpx](https://www.python-httpx.org/) for upstream communication

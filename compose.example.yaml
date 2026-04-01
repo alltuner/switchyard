@@ -2,7 +2,7 @@
 # ABOUTME: Persists registry data in a named volume.
 services:
   switchyard:
-    build: .
+    image: ghcr.io/alltuner/switchyard:latest
     ports:
       - "5050:5050"
     volumes:
