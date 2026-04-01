@@ -17,6 +17,7 @@ class UpstreamClient:
             base_url=self._base_url,
             timeout=httpx.Timeout(connect=10, read=300, write=300, pool=10),
             follow_redirects=True,
+            http2=True,
         )
 
     async def close(self) -> None:

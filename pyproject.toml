@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "starlette>=0.40",
     "granian[uvloop]>=1.6",
-    "httpx>=0.27",
+    "httpx[brotli,zstd,http2]>=0.27",
     "loguru>=0.7",
     "pydantic-settings>=2.5",
 ]

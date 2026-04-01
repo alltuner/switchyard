@@ -26,8 +26,9 @@ docker push localhost:5050/myapp:latest
 
 ### Docker Compose (recommended)
 
+Copy `compose.example.yaml` to `compose.yaml` and fill in your upstream registry URL:
+
 ```yaml
-# compose.yaml
 services:
   switchyard:
     image: ghcr.io/alltuner/switchyard:latest
