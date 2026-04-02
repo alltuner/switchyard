@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/alltuner/switchyard/compare/v0.1.8...v0.1.9) (2026-04-02)
+
+
+### Bug Fixes
+
+* abort sync when child manifest blobs are missing locally ([#26](https://github.com/alltuner/switchyard/issues/26)) ([44f5c2d](https://github.com/alltuner/switchyard/commit/44f5c2d18392e9f0a4ccc06f6159176d4da425aa))
+
 ## [0.1.8](https://github.com/alltuner/switchyard/compare/v0.1.7...v0.1.8) (2026-04-02)
 
 
