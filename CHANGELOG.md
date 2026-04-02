@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/alltuner/switchyard/compare/v0.1.4...v0.1.5) (2026-04-02)
+
+
+### Bug Fixes
+
+* fix upstream sync and adopt python-dxf ([#17](https://github.com/alltuner/switchyard/issues/17)) ([8b23ab7](https://github.com/alltuner/switchyard/commit/8b23ab7160c47d8f20c92818a752e7813a1567ba))
+
 ## [0.1.4](https://github.com/alltuner/switchyard/compare/v0.1.3...v0.1.4) (2026-04-02)
 
 
