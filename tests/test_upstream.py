@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 
 import respx
 from httpx import Response
@@ -59,6 +60,77 @@ async def test_push_blob_uploads() -> None:
     client = UpstreamClient(BASE)
     await client.push_blob("myapp", "sha256:abc123", b"blob data")
     assert respx.calls.call_count == 3  # HEAD + POST + PUT
+    await client.close()
+
+
+@respx.mock
+async def test_push_blob_preserves_location_query_params() -> None:
+    """Registry Location may include a _state token; digest must be appended, not replace it."""
+    location = f"{BASE}/v2/myapp/blobs/uploads/uuid-1?_state=signed-token"
+    respx.head(f"{BASE}/v2/myapp/blobs/sha256:abc123").mock(
+        return_value=Response(404)
+    )
+    respx.post(f"{BASE}/v2/myapp/blobs/uploads/").mock(
+        return_value=Response(202, headers={"Location": location})
+    )
+    put_route = respx.put(url__regex=r".*/v2/myapp/blobs/uploads/uuid-1.*").mock(
+        return_value=Response(201)
+    )
+
+    client = UpstreamClient(BASE)
+    await client.push_blob("myapp", "sha256:abc123", b"blob data")
+
+    put_url = str(put_route.calls[0].request.url)
+    assert "_state=signed-token" in put_url, f"_state param lost: {put_url}"
+    assert "digest=sha256" in put_url, f"digest param missing: {put_url}"
+    await client.close()
+
+
+@respx.mock
+async def test_push_blob_streaming_uploads() -> None:
+    respx.head(f"{BASE}/v2/myapp/blobs/sha256:abc123").mock(
+        return_value=Response(404)
+    )
+    respx.post(f"{BASE}/v2/myapp/blobs/uploads/").mock(
+        return_value=Response(202, headers={"Location": f"{BASE}/v2/myapp/blobs/uploads/uuid-1"})
+    )
+    put_route = respx.put(f"{BASE}/v2/myapp/blobs/uploads/uuid-1").mock(
+        return_value=Response(201)
+    )
+
+    async def blob_stream() -> AsyncIterator[bytes]:
+        yield b"blob data"
+
+    client = UpstreamClient(BASE)
+    await client.push_blob_streaming("myapp", "sha256:abc123", blob_stream())
+    assert respx.calls.call_count == 3  # HEAD + POST + PUT
+    assert put_route.calls[0].request.headers["content-type"] == "application/octet-stream"
+    await client.close()
+
+
+@respx.mock
+async def test_push_blob_streaming_preserves_location_query_params() -> None:
+    """Registry Location may include a _state token; digest must be appended, not replace it."""
+    location = f"{BASE}/v2/myapp/blobs/uploads/uuid-1?_state=signed-token"
+    respx.head(f"{BASE}/v2/myapp/blobs/sha256:abc123").mock(
+        return_value=Response(404)
+    )
+    respx.post(f"{BASE}/v2/myapp/blobs/uploads/").mock(
+        return_value=Response(202, headers={"Location": location})
+    )
+    put_route = respx.put(url__regex=r".*/v2/myapp/blobs/uploads/uuid-1.*").mock(
+        return_value=Response(201)
+    )
+
+    async def blob_stream() -> AsyncIterator[bytes]:
+        yield b"blob data"
+
+    client = UpstreamClient(BASE)
+    await client.push_blob_streaming("myapp", "sha256:abc123", blob_stream())
+
+    put_url = str(put_route.calls[0].request.url)
+    assert "_state=signed-token" in put_url, f"_state param lost: {put_url}"
+    assert "digest=sha256" in put_url, f"digest param missing: {put_url}"
     await client.close()
 
 
