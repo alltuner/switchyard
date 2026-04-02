@@ -14,6 +14,14 @@ from switchyard.upstream import UpstreamClient
 log = logger.bind(component="sync")
 
 
+class SyncMissingBlobsError(Exception):
+    """Raised when blobs referenced by a manifest are not available locally."""
+
+    def __init__(self, missing: list[str]) -> None:
+        self.missing = missing
+        super().__init__(f"Missing {len(missing)} blob(s): {', '.join(d[:19] for d in missing)}")
+
+
 async def sync_one(
     marker: SyncMarker,
     storage: Storage,
@@ -39,17 +47,11 @@ async def sync_one(
 
     body, content_type = result
 
-    # Parse manifest to extract layer digests
-    digests = _extract_blob_digests(body)
+    # Collect all blobs and child manifests, checking for missing blobs before
+    # pushing anything upstream.
+    all_blobs: list[str] = _extract_blob_digests(body)
+    children: list[tuple[str, bytes, str]] = []
 
-    # Push each blob that doesn't exist upstream
-    for digest in digests:
-        if await storage.has_blob(digest):
-            await upstream.push_blob_streaming(name, digest, storage.stream_blob(digest))
-        else:
-            log.warning("Blob {} referenced by manifest but missing locally", digest[:19])
-
-    # For image indexes, push child manifests before the index itself
     for child_digest in _extract_child_manifests(body):
         child = await storage.get_manifest(name, child_digest)
         if child is None:
@@ -59,23 +61,31 @@ async def sync_one(
             )
             continue
         child_body, child_ct = child
+        children.append((child_digest, child_body, child_ct))
+        all_blobs.extend(_extract_blob_digests(child_body))
 
-        # Push blobs referenced by the child manifest
-        for blob_digest in _extract_blob_digests(child_body):
-            if await storage.has_blob(blob_digest):
-                await upstream.push_blob_streaming(
-                    name, blob_digest, storage.stream_blob(blob_digest)
-                )
-            else:
-                log.warning("Blob {} referenced by child manifest but missing locally", blob_digest[:19])
+    missing = [d for d in all_blobs if not await storage.has_blob(d)]
+    if missing:
+        for digest in missing:
+            log.warning("Blob {} referenced by manifest but missing locally", digest[:19])
+        raise SyncMissingBlobsError(missing)
 
+    # Push blobs
+    pushed_blobs: set[str] = set()
+    for digest in all_blobs:
+        if digest not in pushed_blobs:
+            await upstream.push_blob_streaming(name, digest, storage.stream_blob(digest))
+            pushed_blobs.add(digest)
+
+    # Push child manifests before the index
+    for child_digest, child_body, child_ct in children:
         await upstream.push_manifest(name, child_digest, child_body, child_ct)
 
-    # Push the manifest
+    # Push the top-level manifest
     await upstream.push_manifest(name, reference, body, content_type)
 
     await queue.mark_done(marker)
-    log.info("Synced {name}:{ref} ({n} blobs)", name=name, ref=reference, n=len(digests))
+    log.info("Synced {name}:{ref} ({n} blobs)", name=name, ref=reference, n=len(pushed_blobs))
 
 
 def _extract_blob_digests(manifest_body: bytes) -> list[str]:
