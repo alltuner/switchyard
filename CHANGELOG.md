@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/alltuner/switchyard/compare/v0.1.5...v0.1.6) (2026-04-02)
+
+
+### Bug Fixes
+
+* replace python-dxf with direct httpx for correct Content-Type on manifest push ([#19](https://github.com/alltuner/switchyard/issues/19)) ([9a9d358](https://github.com/alltuner/switchyard/commit/9a9d35846d0be6023caa37852926f3eb85a37c61))
+
 ## [0.1.5](https://github.com/alltuner/switchyard/compare/v0.1.4...v0.1.5) (2026-04-02)
 
 
