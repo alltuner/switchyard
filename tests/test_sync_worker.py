@@ -6,8 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-import httpx
-import respx
+import responses
 
 from switchyard.storage import Storage
 from switchyard.sync_queue import SyncQueue
@@ -44,7 +43,7 @@ def test_extract_blob_digests_invalid_json() -> None:
     assert _extract_blob_digests(b"not json") == []
 
 
-@respx.mock
+@responses.activate
 async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
@@ -68,13 +67,18 @@ async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     pending = await queue.list_pending()
     assert len(pending) == 1
 
-    # Mock upstream
-    respx.head(url__regex=r".*/blobs/.*").mock(return_value=httpx.Response(404))
-    respx.post(url__regex=r".*/blobs/uploads/").mock(
-        return_value=httpx.Response(202, headers={"Location": "/v2/myapp/blobs/uploads/u1"})
+    # Mock upstream: HEAD returns 404 (blob not there), POST+PUT for upload, PUT for manifest
+    responses.add(
+        responses.HEAD, url="https://central:5000/v2/myapp/blobs/" + blob_digest, status=404
     )
-    respx.put(url__regex=r".*/blobs/uploads/.*").mock(return_value=httpx.Response(201))
-    respx.put(url__regex=r".*/manifests/.*").mock(return_value=httpx.Response(201))
+    responses.add(
+        responses.POST,
+        url="https://central:5000/v2/myapp/blobs/uploads/",
+        status=202,
+        headers={"Location": "https://central:5000/v2/myapp/blobs/uploads/u1"},
+    )
+    responses.add(responses.PUT, url="https://central:5000/v2/myapp/blobs/uploads/u1", status=201)
+    responses.add(responses.PUT, url="https://central:5000/v2/myapp/manifests/latest", status=201)
 
     upstream = UpstreamClient("https://central:5000")
     await sync_one(pending[0], storage, queue, upstream)
@@ -85,7 +89,7 @@ async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     assert len(remaining) == 0
 
 
-@respx.mock
+@responses.activate
 async def test_sync_one_skips_existing_blobs(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
@@ -104,8 +108,13 @@ async def test_sync_one_skips_existing_blobs(tmp_path: Path) -> None:
     await queue.enqueue("myapp", "v1")
 
     # Blob already exists upstream
-    respx.head(url__regex=r".*/blobs/.*").mock(return_value=httpx.Response(200))
-    respx.put(url__regex=r".*/manifests/.*").mock(return_value=httpx.Response(201))
+    responses.add(
+        responses.HEAD,
+        url="https://central:5000/v2/myapp/blobs/" + blob_digest,
+        status=200,
+        headers={"Content-Length": str(len(blob_data))},
+    )
+    responses.add(responses.PUT, url="https://central:5000/v2/myapp/manifests/v1", status=201)
 
     upstream = UpstreamClient("https://central:5000")
     pending = await queue.list_pending()
@@ -113,11 +122,11 @@ async def test_sync_one_skips_existing_blobs(tmp_path: Path) -> None:
     await upstream.close()
 
     # Should not have attempted POST for upload (blob exists)
-    post_calls = [c for c in respx.calls if c.request.method == "POST"]
+    post_calls = [c for c in responses.calls if c.request.method == "POST"]
     assert len(post_calls) == 0
 
 
-@respx.mock
+@responses.activate
 async def test_sync_one_missing_manifest(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
