@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.8](https://github.com/alltuner/switchyard/compare/v0.1.7...v0.1.8) (2026-04-02)
+
+
+### Bug Fixes
+
+* push child manifests before image index during upstream sync ([#23](https://github.com/alltuner/switchyard/issues/23)) ([3a26e79](https://github.com/alltuner/switchyard/commit/3a26e794813eb65573df1c1fe8d374ce010f26f6))
+
+
+### Miscellaneous Chores
+
+* update lockfile ([#25](https://github.com/alltuner/switchyard/issues/25)) ([c5c32f1](https://github.com/alltuner/switchyard/commit/c5c32f136616c947696f3b4cb07cb7a2e494b7a2))
+
 ## [0.1.7](https://github.com/alltuner/switchyard/compare/v0.1.6...v0.1.7) (2026-04-02)
 
 
