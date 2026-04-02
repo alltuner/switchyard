@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/alltuner/switchyard/compare/v0.1.6...v0.1.7) (2026-04-02)
+
+
+### Bug Fixes
+
+* preserve Location query params when completing blob uploads ([#21](https://github.com/alltuner/switchyard/issues/21)) ([98c486f](https://github.com/alltuner/switchyard/commit/98c486fd4ec917b7f56589cc0153d67cfecd317f))
+
 ## [0.1.6](https://github.com/alltuner/switchyard/compare/v0.1.5...v0.1.6) (2026-04-02)
 
 
