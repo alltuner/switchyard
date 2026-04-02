@@ -16,8 +16,6 @@ class UpstreamClient:
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=httpx.Timeout(connect=10, read=300, write=300, pool=10),
-            follow_redirects=True,
-            http2=True,
         )
 
     async def close(self) -> None:
@@ -26,11 +24,13 @@ class UpstreamClient:
     # -- Blob operations --
 
     async def check_blob(self, name: str, digest: str) -> bool:
-        resp = await self._client.head(f"/v2/{name}/blobs/{digest}")
+        resp = await self._client.head(f"/v2/{name}/blobs/{digest}", follow_redirects=True)
         return resp.status_code == 200
 
     async def pull_blob(self, name: str, digest: str) -> AsyncIterator[bytes]:
-        async with self._client.stream("GET", f"/v2/{name}/blobs/{digest}") as resp:
+        async with self._client.stream(
+            "GET", f"/v2/{name}/blobs/{digest}", follow_redirects=True
+        ) as resp:
             resp.raise_for_status()
             async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
                 yield chunk
@@ -47,14 +47,8 @@ class UpstreamClient:
         resp.raise_for_status()
         location = resp.headers["Location"]
 
-        # Complete with monolithic PUT
-        if location.startswith("/"):
-            upload_url = location
-        else:
-            upload_url = location
-
         resp = await self._client.put(
-            upload_url,
+            location,
             content=data,
             params={"digest": digest},
             headers={"Content-Type": "application/octet-stream"},
@@ -75,14 +69,9 @@ class UpstreamClient:
         resp.raise_for_status()
         location = resp.headers["Location"]
 
-        # Stream the blob content as a monolithic PUT
-        async def _body() -> AsyncIterator[bytes]:
-            async for chunk in stream:
-                yield chunk
-
         resp = await self._client.put(
             location,
-            content=_body(),
+            content=stream,
             params={"digest": digest},
             headers={"Content-Type": "application/octet-stream"},
         )
@@ -92,13 +81,16 @@ class UpstreamClient:
     # -- Manifest operations --
 
     async def check_manifest(self, name: str, reference: str) -> bool:
-        resp = await self._client.head(f"/v2/{name}/manifests/{reference}")
+        resp = await self._client.head(
+            f"/v2/{name}/manifests/{reference}", follow_redirects=True
+        )
         return resp.status_code == 200
 
     async def pull_manifest(self, name: str, reference: str) -> tuple[bytes, str, str] | None:
         """Pull a manifest. Returns (body, content_type, digest) or None."""
         resp = await self._client.get(
             f"/v2/{name}/manifests/{reference}",
+            follow_redirects=True,
             headers={
                 "Accept": ", ".join(
                     [
