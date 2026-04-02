@@ -49,6 +49,28 @@ async def sync_one(
         else:
             log.warning("Blob {} referenced by manifest but missing locally", digest[:19])
 
+    # For image indexes, push child manifests before the index itself
+    for child_digest in _extract_child_manifests(body):
+        child = await storage.get_manifest(name, child_digest)
+        if child is None:
+            log.warning(
+                "Child manifest {} referenced by index but missing locally",
+                child_digest[:19],
+            )
+            continue
+        child_body, child_ct = child
+
+        # Push blobs referenced by the child manifest
+        for blob_digest in _extract_blob_digests(child_body):
+            if await storage.has_blob(blob_digest):
+                await upstream.push_blob_streaming(
+                    name, blob_digest, storage.stream_blob(blob_digest)
+                )
+            else:
+                log.warning("Blob {} referenced by child manifest but missing locally", blob_digest[:19])
+
+        await upstream.push_manifest(name, child_digest, child_body, child_ct)
+
     # Push the manifest
     await upstream.push_manifest(name, reference, body, content_type)
 
@@ -77,6 +99,30 @@ def _extract_blob_digests(manifest_body: bytes) -> list[str]:
             digests.append(layer["digest"])
 
     return digests
+
+
+_INDEX_MEDIA_TYPES = {
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+}
+
+
+def _extract_child_manifests(manifest_body: bytes) -> list[str]:
+    """Extract child manifest digests from an image index / manifest list."""
+    try:
+        manifest = json.loads(manifest_body)
+    except json.JSONDecodeError:
+        return []
+
+    media_type = manifest.get("mediaType", "")
+    if media_type not in _INDEX_MEDIA_TYPES:
+        return []
+
+    return [
+        m["digest"]
+        for m in manifest.get("manifests", [])
+        if isinstance(m, dict) and "digest" in m
+    ]
 
 
 async def run_sync_loop(
