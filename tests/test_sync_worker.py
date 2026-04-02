@@ -6,12 +6,15 @@ import hashlib
 import json
 from pathlib import Path
 
-import responses
+import respx
+from httpx import Response
 
 from switchyard.storage import Storage
 from switchyard.sync_queue import SyncQueue
 from switchyard.sync_worker import _extract_blob_digests, sync_one
 from switchyard.upstream import UpstreamClient
+
+BASE = "https://central:5000"
 
 
 def _make_manifest(layer_digests: list[str], config_digest: str = "") -> bytes:
@@ -43,7 +46,7 @@ def test_extract_blob_digests_invalid_json() -> None:
     assert _extract_blob_digests(b"not json") == []
 
 
-@responses.activate
+@respx.mock
 async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
@@ -68,19 +71,20 @@ async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     assert len(pending) == 1
 
     # Mock upstream: HEAD returns 404 (blob not there), POST+PUT for upload, PUT for manifest
-    responses.add(
-        responses.HEAD, url="https://central:5000/v2/myapp/blobs/" + blob_digest, status=404
+    respx.head(f"{BASE}/v2/myapp/blobs/{blob_digest}").mock(
+        return_value=Response(404)
     )
-    responses.add(
-        responses.POST,
-        url="https://central:5000/v2/myapp/blobs/uploads/",
-        status=202,
-        headers={"Location": "https://central:5000/v2/myapp/blobs/uploads/u1"},
+    respx.post(f"{BASE}/v2/myapp/blobs/uploads/").mock(
+        return_value=Response(202, headers={"Location": f"{BASE}/v2/myapp/blobs/uploads/u1"})
     )
-    responses.add(responses.PUT, url="https://central:5000/v2/myapp/blobs/uploads/u1", status=201)
-    responses.add(responses.PUT, url="https://central:5000/v2/myapp/manifests/latest", status=201)
+    respx.put(f"{BASE}/v2/myapp/blobs/uploads/u1").mock(
+        return_value=Response(201)
+    )
+    respx.put(f"{BASE}/v2/myapp/manifests/latest").mock(
+        return_value=Response(201)
+    )
 
-    upstream = UpstreamClient("https://central:5000")
+    upstream = UpstreamClient(BASE)
     await sync_one(pending[0], storage, queue, upstream)
     await upstream.close()
 
@@ -89,7 +93,7 @@ async def test_sync_one_pushes_blobs_and_manifest(tmp_path: Path) -> None:
     assert len(remaining) == 0
 
 
-@responses.activate
+@respx.mock
 async def test_sync_one_skips_existing_blobs(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
@@ -108,25 +112,24 @@ async def test_sync_one_skips_existing_blobs(tmp_path: Path) -> None:
     await queue.enqueue("myapp", "v1")
 
     # Blob already exists upstream
-    responses.add(
-        responses.HEAD,
-        url="https://central:5000/v2/myapp/blobs/" + blob_digest,
-        status=200,
-        headers={"Content-Length": str(len(blob_data))},
+    respx.head(f"{BASE}/v2/myapp/blobs/{blob_digest}").mock(
+        return_value=Response(200, headers={"Content-Length": str(len(blob_data))})
     )
-    responses.add(responses.PUT, url="https://central:5000/v2/myapp/manifests/v1", status=201)
+    respx.put(f"{BASE}/v2/myapp/manifests/v1").mock(
+        return_value=Response(201)
+    )
 
-    upstream = UpstreamClient("https://central:5000")
+    upstream = UpstreamClient(BASE)
     pending = await queue.list_pending()
     await sync_one(pending[0], storage, queue, upstream)
     await upstream.close()
 
     # Should not have attempted POST for upload (blob exists)
-    post_calls = [c for c in responses.calls if c.request.method == "POST"]
+    post_calls = [c for c in respx.calls if c.request.method == "POST"]
     assert len(post_calls) == 0
 
 
-@responses.activate
+@respx.mock
 async def test_sync_one_missing_manifest(tmp_path: Path) -> None:
     storage = Storage(str(tmp_path))
     await storage.init()
@@ -136,7 +139,7 @@ async def test_sync_one_missing_manifest(tmp_path: Path) -> None:
     await queue.enqueue("ghost", "latest")
     pending = await queue.list_pending()
 
-    upstream = UpstreamClient("https://central:5000")
+    upstream = UpstreamClient(BASE)
     await sync_one(pending[0], storage, queue, upstream)
     await upstream.close()
 
