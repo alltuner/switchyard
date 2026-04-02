@@ -12,7 +12,7 @@ PORT = 5050
 def main() -> None:
     server = Granian(
         target="switchyard.app:app",
-        address="0.0.0.0",
+        address="::",
         port=PORT,
         interface=Interfaces.ASGI,
         loop=Loops.uvloop,
