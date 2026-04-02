@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.4](https://github.com/alltuner/switchyard/compare/v0.1.3...v0.1.4) (2026-04-02)
+
+
+### Miscellaneous Chores
+
+* **deps:** update docker/setup-buildx-action action to v4 ([#14](https://github.com/alltuner/switchyard/issues/14)) ([eda3721](https://github.com/alltuner/switchyard/commit/eda3721e641906c93065b1bba9b42c1b120c237f))
+* **deps:** update docker/setup-qemu-action action to v4 ([#16](https://github.com/alltuner/switchyard/issues/16)) ([4aeb8e0](https://github.com/alltuner/switchyard/commit/4aeb8e04fbafaa1b1460618364062eff0c7dfc3c))
+
+
+### CI/CD Changes
+
+* build multi-arch Docker images (amd64 + arm64) ([#13](https://github.com/alltuner/switchyard/issues/13)) ([a7dc852](https://github.com/alltuner/switchyard/commit/a7dc852d0a35386894fc2f6383730c8cbece2686))
+
 ## [0.1.3](https://github.com/alltuner/switchyard/compare/v0.1.2...v0.1.3) (2026-04-01)
 
 
