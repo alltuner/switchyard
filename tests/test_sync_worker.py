@@ -6,12 +6,18 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
 import respx
 from httpx import Response
 
 from switchyard.storage import Storage
 from switchyard.sync_queue import SyncQueue
-from switchyard.sync_worker import _extract_blob_digests, _extract_child_manifests, sync_one
+from switchyard.sync_worker import (
+    SyncMissingBlobsError,
+    _extract_blob_digests,
+    _extract_child_manifests,
+    sync_one,
+)
 from switchyard.upstream import UpstreamClient
 
 BASE = "https://central:5000"
@@ -243,3 +249,36 @@ async def test_sync_one_pushes_child_manifests_before_index(tmp_path: Path) -> N
 
     remaining = await queue.list_pending()
     assert len(remaining) == 0
+
+
+@respx.mock
+async def test_sync_one_fails_when_child_manifest_blobs_missing(tmp_path: Path) -> None:
+    """Sync must fail when a child manifest references blobs not stored locally."""
+    storage = Storage(str(tmp_path))
+    await storage.init()
+    queue = SyncQueue(str(tmp_path))
+    await queue.init()
+
+    # Store a child manifest referencing a blob we DON'T store locally
+    missing_blob = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    child_body = _make_manifest([missing_blob])
+    child_ct = "application/vnd.oci.image.manifest.v1+json"
+    child_digest = f"sha256:{hashlib.sha256(child_body).hexdigest()}"
+    await storage.store_manifest("myapp", child_digest, child_body, child_ct)
+
+    # Store an image index referencing the child
+    index_body = _make_index([child_digest])
+    index_ct = "application/vnd.oci.image.index.v1+json"
+    await storage.store_manifest("myapp", "latest", index_body, index_ct)
+
+    await queue.enqueue("myapp", "latest")
+    pending = await queue.list_pending()
+
+    upstream = UpstreamClient(BASE)
+    with pytest.raises(SyncMissingBlobsError):
+        await sync_one(pending[0], storage, queue, upstream)
+    await upstream.close()
+
+    # Marker should NOT be cleared (sync failed)
+    remaining = await queue.list_pending()
+    assert len(remaining) == 1
