@@ -2,14 +2,14 @@
 # ABOUTME: Simulates a complete Docker image push, sync to upstream, and pull.
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
-import respx
+import responses
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.testclient import TestClient
@@ -81,7 +81,7 @@ def _make_manifest(config_digest: str, layer_digests: list[str]) -> bytes:
 class TestFullPushSyncCycle:
     """Push an image locally, sync it to a mock upstream, verify everything."""
 
-    @respx.mock
+    @responses.activate
     def test_push_and_sync(self, tmp_path: Path) -> None:
         storage = Storage(str(tmp_path))
         queue = SyncQueue(str(tmp_path))
@@ -127,14 +127,41 @@ class TestFullPushSyncCycle:
             assert len(markers) == 1
 
         # 5. Mock upstream and run sync
-        respx.head(url__regex=r".*/blobs/.*").mock(return_value=httpx.Response(404))
-        respx.post(url__regex=r".*/blobs/uploads/").mock(
-            return_value=httpx.Response(202, headers={"Location": "/v2/myapp/blobs/uploads/u1"})
+        # HEAD checks for both blobs (config + layer)
+        responses.add(
+            responses.HEAD,
+            url="https://central:5000/v2/myapp/blobs/" + config_digest,
+            status=404,
         )
-        respx.put(url__regex=r".*/blobs/uploads/.*").mock(return_value=httpx.Response(201))
-        respx.put(url__regex=r".*/manifests/.*").mock(return_value=httpx.Response(201))
-
-        import asyncio
+        responses.add(
+            responses.HEAD,
+            url="https://central:5000/v2/myapp/blobs/" + layer_digest,
+            status=404,
+        )
+        # POST to initiate upload for each blob
+        responses.add(
+            responses.POST,
+            url="https://central:5000/v2/myapp/blobs/uploads/",
+            status=202,
+            headers={"Location": "https://central:5000/v2/myapp/blobs/uploads/u1"},
+        )
+        responses.add(
+            responses.POST,
+            url="https://central:5000/v2/myapp/blobs/uploads/",
+            status=202,
+            headers={"Location": "https://central:5000/v2/myapp/blobs/uploads/u2"},
+        )
+        # PUT to complete each blob upload
+        responses.add(
+            responses.PUT, url="https://central:5000/v2/myapp/blobs/uploads/u1", status=201
+        )
+        responses.add(
+            responses.PUT, url="https://central:5000/v2/myapp/blobs/uploads/u2", status=201
+        )
+        # PUT manifest
+        responses.add(
+            responses.PUT, url="https://central:5000/v2/myapp/manifests/latest", status=201
+        )
 
         async def _run_sync() -> None:
             await storage.init()
@@ -147,9 +174,9 @@ class TestFullPushSyncCycle:
         asyncio.run(_run_sync())
 
         # Verify: 2 blob HEAD checks + 2 blob uploads (POST+PUT each) + 1 manifest PUT
-        head_calls = [c for c in respx.calls if c.request.method == "HEAD"]
-        post_calls = [c for c in respx.calls if c.request.method == "POST"]
-        put_calls = [c for c in respx.calls if c.request.method == "PUT"]
+        head_calls = [c for c in responses.calls if c.request.method == "HEAD"]
+        post_calls = [c for c in responses.calls if c.request.method == "POST"]
+        put_calls = [c for c in responses.calls if c.request.method == "PUT"]
         assert len(head_calls) == 2  # config + layer
         assert len(post_calls) == 2  # config + layer upload initiation
         assert len(put_calls) == 3  # config + layer upload completion + manifest
@@ -162,7 +189,7 @@ class TestFullPushSyncCycle:
 class TestPullProxyFromUpstream:
     """Pull an image that only exists on the upstream registry."""
 
-    @respx.mock
+    @responses.activate
     def test_pull_manifest_from_upstream(self, tmp_path: Path) -> None:
         storage = Storage(str(tmp_path))
         queue = SyncQueue(str(tmp_path))
@@ -174,15 +201,14 @@ class TestPullProxyFromUpstream:
         manifest_ct = "application/vnd.docker.distribution.manifest.v2+json"
         manifest_digest = f"sha256:{hashlib.sha256(manifest_body).hexdigest()}"
 
-        respx.get("https://central:5000/v2/remote-app/manifests/latest").mock(
-            return_value=httpx.Response(
-                200,
-                content=manifest_body,
-                headers={
-                    "Content-Type": manifest_ct,
-                    "Docker-Content-Digest": manifest_digest,
-                },
-            )
+        responses.get(
+            "https://central:5000/v2/remote-app/manifests/latest",
+            body=manifest_body,
+            status=200,
+            headers={
+                "Content-Type": manifest_ct,
+                "Docker-Content-Digest": manifest_digest,
+            },
         )
 
         with TestClient(app) as client:
@@ -193,8 +219,8 @@ class TestPullProxyFromUpstream:
             assert resp.headers["Docker-Content-Digest"] == manifest_digest
 
             # Second pull should be served from local cache (no more upstream calls)
-            respx.reset()
             resp = client.get("/v2/remote-app/manifests/latest")
             assert resp.status_code == 200
             assert resp.content == manifest_body
-            assert len(respx.calls) == 0  # served from cache
+            # Only 1 call to upstream (first pull), second served from cache
+            assert len(responses.calls) == 1
