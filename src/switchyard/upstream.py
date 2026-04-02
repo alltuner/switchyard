@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from urllib.parse import urlencode
 
 import httpx
 from loguru import logger
@@ -18,6 +19,12 @@ _MANIFEST_ACCEPT = ", ".join([
     "application/vnd.docker.distribution.manifest.list.v2+json",
     "application/vnd.oci.image.index.v1+json",
 ])
+
+
+def _append_digest(location: str, digest: str) -> str:
+    """Append digest query param, preserving any existing query string (e.g. _state)."""
+    sep = "&" if "?" in location else "?"
+    return f"{location}{sep}{urlencode({'digest': digest})}"
 
 
 class UpstreamClient:
@@ -57,12 +64,11 @@ class UpstreamClient:
 
         resp = await self._client.post(f"/v2/{name}/blobs/uploads/")
         resp.raise_for_status()
-        location = resp.headers["Location"]
+        location = _append_digest(resp.headers["Location"], digest)
 
         resp = await self._client.put(
             location,
             content=data,
-            params={"digest": digest},
             headers={"Content-Type": "application/octet-stream"},
         )
         resp.raise_for_status()
@@ -78,7 +84,7 @@ class UpstreamClient:
 
         resp = await self._client.post(f"/v2/{name}/blobs/uploads/")
         resp.raise_for_status()
-        location = resp.headers["Location"]
+        location = _append_digest(resp.headers["Location"], digest)
 
         async def _body() -> AsyncIterator[bytes]:
             async for chunk in stream:
@@ -87,7 +93,6 @@ class UpstreamClient:
         resp = await self._client.put(
             location,
             content=_body(),
-            params={"digest": digest},
             headers={"Content-Type": "application/octet-stream"},
         )
         resp.raise_for_status()
