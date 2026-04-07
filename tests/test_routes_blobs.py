@@ -42,6 +42,59 @@ def test_head_blob_missing(registry: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_head_blob_returns_404_when_only_upstream_has_it(tmp_path: Path) -> None:
+    """HEAD must report only locally-stored blobs.
+
+    When a blob exists upstream but not locally, HEAD should return 404.
+    Otherwise push clients skip uploading the blob (they think the registry
+    already has it) and sync later fails because the blob isn't on disk.
+    """
+    from unittest.mock import AsyncMock
+
+    from switchyard.config import Settings
+    from switchyard.storage import Storage
+    from switchyard.sync_queue import SyncQueue
+    from switchyard.upstream import UpstreamClient
+
+    storage = Storage(str(tmp_path))
+    queue = SyncQueue(str(tmp_path))
+    settings = Settings(data_dir=str(tmp_path))
+
+    # Build an app with a mocked upstream that claims to have the blob
+    upstream = AsyncMock(spec=UpstreamClient)
+    upstream.check_blob = AsyncMock(return_value=True)
+
+    from collections.abc import AsyncIterator
+    from contextlib import asynccontextmanager
+
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+
+    from switchyard.routes import blobs
+
+    @asynccontextmanager
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        await storage.init()
+        await queue.init()
+        app.state.storage = storage
+        app.state.queue = queue
+        app.state.settings = settings
+        app.state.upstream = upstream
+        yield
+
+    app = Starlette(
+        routes=[Route("/v2/{name:path}/blobs/{digest}", blobs.head_blob, methods=["HEAD"])],
+        lifespan=lifespan,
+    )
+
+    with TestClient(app) as client:
+        resp = client.head("/v2/myapp/blobs/sha256:abc123")
+        assert resp.status_code == 404, (
+            "HEAD should return 404 for blobs not stored locally, "
+            "even when upstream has them"
+        )
+
+
 def test_get_blob_missing(registry: TestClient) -> None:
     resp = registry.get("/v2/myapp/blobs/sha256:nonexistent")
     assert resp.status_code == 404
