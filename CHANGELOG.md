@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.10](https://github.com/alltuner/switchyard/compare/v0.1.9...v0.1.10) (2026-04-07)
+
+
+### Features
+
+* retry stuck sync markers immediately when missing blobs arrive ([#30](https://github.com/alltuner/switchyard/issues/30)) ([5f84fc9](https://github.com/alltuner/switchyard/commit/5f84fc984cc79013284c64b01ac8c5ba581f6f1c))
+
+
+### Bug Fixes
+
+* deduplicate missing blobs and reduce sync error noise ([#28](https://github.com/alltuner/switchyard/issues/28)) ([f53b9f0](https://github.com/alltuner/switchyard/commit/f53b9f0e29b5b3a1d6fce9c3cfa1b9b637dd999d))
+
 ## [0.1.9](https://github.com/alltuner/switchyard/compare/v0.1.8...v0.1.9) (2026-04-02)
 
 
