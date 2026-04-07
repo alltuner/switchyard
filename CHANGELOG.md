@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/alltuner/switchyard/compare/v0.1.11...v0.1.12) (2026-04-07)
+
+
+### Bug Fixes
+
+* use atomic writes for sync queue markers to prevent race corruption ([#34](https://github.com/alltuner/switchyard/issues/34)) ([867a0d1](https://github.com/alltuner/switchyard/commit/867a0d1174cd10fc96297c57f5359905e4a3e8c6))
+
 ## [0.1.11](https://github.com/alltuner/switchyard/compare/v0.1.10...v0.1.11) (2026-04-07)
 
 
