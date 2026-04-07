@@ -8,11 +8,16 @@ from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 
 from switchyard.storage import Storage
+from switchyard.sync_queue import SyncQueue
 from switchyard.upstream import UpstreamClient
 
 
 def _get_storage(request: Request) -> Storage:
     return request.app.state.storage  # type: ignore[no-any-return]
+
+
+def _get_queue(request: Request) -> SyncQueue:
+    return request.app.state.queue  # type: ignore[no-any-return]
 
 
 def _get_upstream(request: Request) -> UpstreamClient | None:
@@ -108,6 +113,7 @@ async def start_upload(request: Request) -> Response:
                 await storage.delete_upload(upload_id)
                 return Response(status_code=400, content="Digest mismatch")
             await storage.store_blob_from_upload(upload_id, digest)
+            await _get_queue(request).nudge_pending()
             return Response(
                 status_code=201,
                 headers={
@@ -181,6 +187,7 @@ async def complete_upload(request: Request) -> Response:
         return Response(status_code=400, content="Digest mismatch")
 
     await storage.store_blob_from_upload(upload_id, digest)
+    await _get_queue(request).nudge_pending()
     return Response(
         status_code=201,
         headers={

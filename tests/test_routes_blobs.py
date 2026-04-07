@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from pathlib import Path
 
 from starlette.testclient import TestClient
 
@@ -151,3 +153,50 @@ def test_blob_with_nested_name(registry: TestClient) -> None:
     resp = registry.get(f"/v2/library/nginx/blobs/{digest}")
     assert resp.status_code == 200
     assert resp.content == data
+
+
+def test_completing_upload_nudges_pending_markers(
+    registry: TestClient, storage_path: Path
+) -> None:
+    """Blob upload should reset backoff on pending sync markers."""
+    from datetime import UTC, datetime, timedelta
+
+    from switchyard.sync_queue import SyncMarker
+
+    # Create a marker in backoff (simulating a deferred manifest sync)
+    pending_dir = storage_path / "pending" / "myapp"
+    pending_dir.mkdir(parents=True)
+    future = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
+    marker = SyncMarker(name="myapp", reference="latest", retries=3, next_attempt=future)
+    marker_path = pending_dir / "latest.json"
+    marker_path.write_text(json.dumps({"name": "myapp", "reference": "latest", "retries": 3, "next_attempt": future, "created": datetime.now(UTC).isoformat()}))
+
+    # Upload a blob (PUT completion path)
+    _push_blob(registry, "myapp", b"some layer data")
+
+    # Marker should have been nudged to now
+    data = json.loads(marker_path.read_text())
+    nudged_time = datetime.fromisoformat(data["next_attempt"])
+    assert nudged_time <= datetime.now(UTC), "Marker should have been nudged to now"
+
+
+def test_monolithic_upload_nudges_pending_markers(
+    registry: TestClient, storage_path: Path
+) -> None:
+    """Monolithic blob upload should also nudge pending sync markers."""
+    from datetime import UTC, datetime, timedelta
+
+    pending_dir = storage_path / "pending" / "myapp"
+    pending_dir.mkdir(parents=True)
+    future = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
+    marker_path = pending_dir / "latest.json"
+    marker_path.write_text(json.dumps({"name": "myapp", "reference": "latest", "retries": 2, "next_attempt": future, "created": datetime.now(UTC).isoformat()}))
+
+    data = b"monolithic blob for nudge test"
+    digest = f"sha256:{hashlib.sha256(data).hexdigest()}"
+    resp = registry.post(f"/v2/myapp/blobs/uploads/?digest={digest}", content=data)
+    assert resp.status_code == 201
+
+    marker_data = json.loads(marker_path.read_text())
+    nudged_time = datetime.fromisoformat(marker_data["next_attempt"])
+    assert nudged_time <= datetime.now(UTC), "Marker should have been nudged to now"

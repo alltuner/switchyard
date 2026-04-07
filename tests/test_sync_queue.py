@@ -120,6 +120,38 @@ async def test_marker_path_sanitizes_digest_reference(tmp_path: Path) -> None:
     assert "sha256_abc123.json" in str(path)
 
 
+async def test_nudge_pending_resets_backoff(tmp_path: Path) -> None:
+    queue = await _make_queue(tmp_path)
+    await queue.enqueue("app-a", "v1")
+    await queue.enqueue("app-b", "latest")
+
+    # Put both markers into backoff
+    pending = await queue.list_pending()
+    assert len(pending) == 2
+    for marker in pending:
+        await queue.mark_failed(marker)
+
+    # Confirm neither is ready (both in backoff)
+    assert len(await queue.list_pending()) == 0
+
+    # Nudge should reset them all to now
+    count = await queue.nudge_pending()
+    assert count == 2
+
+    # Both should be ready again
+    pending = await queue.list_pending()
+    assert len(pending) == 2
+
+
+async def test_nudge_pending_skips_already_ready(tmp_path: Path) -> None:
+    queue = await _make_queue(tmp_path)
+    await queue.enqueue("myapp", "latest")
+
+    # Marker is already ready (next_attempt = now), nudge should skip it
+    count = await queue.nudge_pending()
+    assert count == 0
+
+
 async def test_marker_is_ready() -> None:
     past = SyncMarker(
         name="a",
