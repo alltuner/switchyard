@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/alltuner/switchyard/compare/v0.1.9...v0.1.10) (2026-04-07)
+
+
+### Bug Fixes
+
+* deduplicate missing blobs and reduce sync error noise ([#28](https://github.com/alltuner/switchyard/issues/28)) ([f53b9f0](https://github.com/alltuner/switchyard/commit/f53b9f0e29b5b3a1d6fce9c3cfa1b9b637dd999d))
+
 ## [0.1.9](https://github.com/alltuner/switchyard/compare/v0.1.8...v0.1.9) (2026-04-02)
 
 
