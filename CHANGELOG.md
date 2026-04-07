@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/alltuner/switchyard/compare/v0.1.10...v0.1.11) (2026-04-07)
+
+
+### Bug Fixes
+
+* don't report upstream-only blobs as locally available in HEAD ([#32](https://github.com/alltuner/switchyard/issues/32)) ([8925dfa](https://github.com/alltuner/switchyard/commit/8925dfab734ff89946e643304f79ac87b8dd6746))
+
 ## [0.1.10](https://github.com/alltuner/switchyard/compare/v0.1.9...v0.1.10) (2026-04-07)
 
 
