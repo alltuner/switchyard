@@ -152,6 +152,39 @@ async def test_nudge_pending_skips_already_ready(tmp_path: Path) -> None:
     assert count == 0
 
 
+async def test_corrupted_marker_file_skipped_gracefully(tmp_path: Path) -> None:
+    """A truncated marker file (e.g. from a concurrent write) should be skipped
+    without affecting other valid markers."""
+    queue = await _make_queue(tmp_path)
+    await queue.enqueue("app-a", "v1")
+
+    # Write a corrupted (empty) marker file simulating a mid-write read
+    corrupted_path = tmp_path / "pending" / "app-b" / "latest.json"
+    corrupted_path.parent.mkdir(parents=True, exist_ok=True)
+    corrupted_path.write_text("")
+
+    pending = await queue.list_pending()
+    assert len(pending) == 1
+    assert pending[0].name == "app-a"
+
+
+async def test_atomic_write_produces_valid_marker(tmp_path: Path) -> None:
+    """Marker files should always contain valid JSON, even after mark_failed updates."""
+    queue = await _make_queue(tmp_path)
+    path = await queue.enqueue("myapp", "sha256:abc123")
+
+    # Verify file is valid JSON
+    data = json.loads(path.read_text())
+    assert data["name"] == "myapp"
+
+    pending = await queue.list_pending()
+    await queue.mark_failed(pending[0])
+
+    # After mark_failed, file should still be valid JSON
+    data = json.loads(path.read_text())
+    assert data["retries"] == 1
+
+
 async def test_marker_is_ready() -> None:
     past = SyncMarker(
         name="a",
