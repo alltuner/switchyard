@@ -26,7 +26,6 @@ def _get_upstream(request: Request) -> UpstreamClient | None:
 
 async def head_blob(request: Request) -> Response:
     storage = _get_storage(request)
-    name = request.path_params["name"]
     digest = request.path_params["digest"]
 
     size = await storage.blob_size(digest)
@@ -35,17 +34,6 @@ async def head_blob(request: Request) -> Response:
             status_code=200,
             headers={
                 "Content-Length": str(size),
-                "Docker-Content-Digest": digest,
-                "Content-Type": "application/octet-stream",
-            },
-        )
-
-    # Fall back to upstream
-    upstream = _get_upstream(request)
-    if upstream and await upstream.check_blob(name, digest):
-        return Response(
-            status_code=200,
-            headers={
                 "Docker-Content-Digest": digest,
                 "Content-Type": "application/octet-stream",
             },
