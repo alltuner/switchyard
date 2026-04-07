@@ -64,6 +64,7 @@ async def sync_one(
         children.append((child_digest, child_body, child_ct))
         all_blobs.extend(_extract_blob_digests(child_body))
 
+    all_blobs = list(dict.fromkeys(all_blobs))
     missing = [d for d in all_blobs if not await storage.has_blob(d)]
     if missing:
         for digest in missing:
@@ -149,6 +150,16 @@ async def run_sync_loop(
             for marker in pending:
                 try:
                     await sync_one(marker, storage, queue, upstream)
+                except SyncMissingBlobsError as exc:
+                    log.warning(
+                        "Sync deferred for {name}:{ref} — {n} blob(s) not yet"
+                        " available locally, will retry after they arrive: {blobs}",
+                        name=marker.name,
+                        ref=marker.reference,
+                        n=len(exc.missing),
+                        blobs=", ".join(d[:19] for d in exc.missing),
+                    )
+                    await queue.mark_failed(marker)
                 except Exception:
                     log.opt(exception=True).error(
                         "Failed to sync {name}:{ref}",

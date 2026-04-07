@@ -2,6 +2,7 @@
 # ABOUTME: Verifies that pending markers are processed and blobs/manifests pushed upstream.
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +17,7 @@ from switchyard.sync_worker import (
     SyncMissingBlobsError,
     _extract_blob_digests,
     _extract_child_manifests,
+    run_sync_loop,
     sync_one,
 )
 from switchyard.upstream import UpstreamClient
@@ -282,3 +284,81 @@ async def test_sync_one_fails_when_child_manifest_blobs_missing(tmp_path: Path) 
     # Marker should NOT be cleared (sync failed)
     remaining = await queue.list_pending()
     assert len(remaining) == 1
+
+
+@respx.mock
+async def test_sync_one_deduplicates_missing_blobs(tmp_path: Path) -> None:
+    """When the same blob digest appears in multiple layers, it should only be
+    reported once in the SyncMissingBlobsError."""
+    storage = Storage(str(tmp_path))
+    await storage.init()
+    queue = SyncQueue(str(tmp_path))
+    await queue.init()
+
+    missing_blob = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    # Same blob referenced twice in two layers
+    manifest_body = _make_manifest([missing_blob, missing_blob])
+    ct = "application/vnd.oci.image.manifest.v1+json"
+    await storage.store_manifest("myapp", "latest", manifest_body, ct)
+
+    await queue.enqueue("myapp", "latest")
+    pending = await queue.list_pending()
+
+    upstream = UpstreamClient(BASE)
+    with pytest.raises(SyncMissingBlobsError) as exc_info:
+        await sync_one(pending[0], storage, queue, upstream)
+    await upstream.close()
+
+    assert len(exc_info.value.missing) == 1
+
+
+@respx.mock
+async def test_run_sync_loop_logs_missing_blobs_without_traceback(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """SyncMissingBlobsError is an expected condition and should be logged as a
+    warning without a full traceback."""
+    import loguru
+    import sys
+
+    # Set up loguru to write to stderr so capfd captures it
+    loguru.logger.remove()
+    loguru.logger.add(sys.stderr, format="{level} | {message}")
+
+    storage = Storage(str(tmp_path))
+    await storage.init()
+    queue = SyncQueue(str(tmp_path))
+    await queue.init()
+
+    missing_blob = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    manifest_body = _make_manifest([missing_blob])
+    ct = "application/vnd.oci.image.manifest.v1+json"
+    await storage.store_manifest("myapp", "v1", manifest_body, ct)
+    await queue.enqueue("myapp", "v1")
+
+    upstream = UpstreamClient(BASE)
+
+    # Run just one iteration by cancelling after a short delay
+    async def cancel_after_one_iteration() -> None:
+        # Give the loop time to process one marker
+        await asyncio.sleep(0.1)
+        raise asyncio.CancelledError
+
+    task = asyncio.create_task(run_sync_loop(storage, queue, upstream, interval=60))
+    await asyncio.sleep(0.2)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    await upstream.close()
+
+    captured = capfd.readouterr()
+    stderr = captured.err
+
+    # Should contain a WARNING, not an ERROR
+    assert "WARNING" in stderr
+    # Should NOT contain "Traceback" (no full stack trace)
+    assert "Traceback" not in stderr
+    # Should mention the missing blobs
+    assert "Missing" in stderr or "missing" in stderr.lower()
