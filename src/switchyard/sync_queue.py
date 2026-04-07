@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
+import tempfile
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from loguru import logger
@@ -35,6 +38,24 @@ class SyncMarker:
         return f"{self.name}/{safe_ref}.json"
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Write content to path atomically via temp file + rename.
+
+    Concurrent readers will either see the old content or the new content,
+    never a partially-written file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+
+
 class SyncQueue:
     def __init__(self, data_dir: str) -> None:
         self._pending = Path(data_dir) / "pending"
@@ -49,11 +70,7 @@ class SyncQueue:
         marker = SyncMarker(name=name, reference=reference)
         path = self._pending / marker.path_key
 
-        def _write() -> None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(asdict(marker), indent=2))
-
-        await asyncio.to_thread(_write)
+        await asyncio.to_thread(_atomic_write, path, json.dumps(asdict(marker), indent=2))
         log.info("Queued sync for {name}:{ref}", name=name, ref=reference)
         return path
 
@@ -68,8 +85,8 @@ class SyncQueue:
                     marker = SyncMarker(**data)
                     if marker.is_ready:
                         markers.append(marker)
-                except (json.JSONDecodeError, TypeError, KeyError):
-                    log.warning("Skipping malformed marker: {}", path)
+                except (json.JSONDecodeError, TypeError, KeyError) as exc:
+                    log.warning("Skipping malformed marker: {} ({})", path, exc)
             return markers
 
         return await asyncio.to_thread(_scan)
@@ -102,10 +119,10 @@ class SyncQueue:
                     marker = SyncMarker(**data)
                     if not marker.is_ready:
                         data["next_attempt"] = now
-                        path.write_text(json.dumps(data, indent=2))
+                        _atomic_write(path, json.dumps(data, indent=2))
                         count += 1
-                except (json.JSONDecodeError, TypeError, KeyError):
-                    log.warning("Skipping malformed marker: {}", path)
+                except (json.JSONDecodeError, TypeError, KeyError) as exc:
+                    log.warning("Skipping malformed marker: {} ({})", path, exc)
             return count
 
         nudged = await asyncio.to_thread(_nudge)
@@ -116,15 +133,9 @@ class SyncQueue:
     async def mark_failed(self, marker: SyncMarker) -> None:
         marker.retries += 1
         backoff = min(5 * (2**marker.retries), MAX_BACKOFF_SECONDS)
-        from datetime import timedelta
-
         marker.next_attempt = (datetime.now(UTC) + timedelta(seconds=backoff)).isoformat()
         path = self._pending / marker.path_key
-
-        def _write() -> None:
-            path.write_text(json.dumps(asdict(marker), indent=2))
-
-        await asyncio.to_thread(_write)
+        await asyncio.to_thread(_atomic_write, path, json.dumps(asdict(marker), indent=2))
         log.warning(
             "Sync failed for {name}:{ref} (retry {n}, next in {b}s)",
             name=marker.name,
