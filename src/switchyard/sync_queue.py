@@ -88,6 +88,31 @@ class SyncQueue:
         await asyncio.to_thread(_delete)
         log.info("Sync complete for {name}:{ref}", name=marker.name, ref=marker.reference)
 
+    async def nudge_pending(self) -> int:
+        """Reset next_attempt to now for all markers in backoff. Returns count nudged."""
+        now = datetime.now(UTC).isoformat()
+
+        def _nudge() -> int:
+            if not self._pending.exists():
+                return 0
+            count = 0
+            for path in self._pending.rglob("*.json"):
+                try:
+                    data = json.loads(path.read_text())
+                    marker = SyncMarker(**data)
+                    if not marker.is_ready:
+                        data["next_attempt"] = now
+                        path.write_text(json.dumps(data, indent=2))
+                        count += 1
+                except (json.JSONDecodeError, TypeError, KeyError):
+                    log.warning("Skipping malformed marker: {}", path)
+            return count
+
+        nudged = await asyncio.to_thread(_nudge)
+        if nudged:
+            log.info("Nudged {} pending marker(s) for immediate retry", nudged)
+        return nudged
+
     async def mark_failed(self, marker: SyncMarker) -> None:
         marker.retries += 1
         backoff = min(5 * (2**marker.retries), MAX_BACKOFF_SECONDS)
