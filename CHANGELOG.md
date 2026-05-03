@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.13](https://github.com/alltuner/switchyard/compare/v0.1.12...v0.1.13) (2026-05-03)
+
+
+### Miscellaneous Chores
+
+* **deps:** update googleapis/release-please-action action to v5 ([#36](https://github.com/alltuner/switchyard/issues/36)) ([91ebe29](https://github.com/alltuner/switchyard/commit/91ebe29526773feb367db9d4c1ada88fd27d53dd))
+
+
+### CI/CD Changes
+
+* allow revert as a conventional PR title type ([#40](https://github.com/alltuner/switchyard/issues/40)) ([603780c](https://github.com/alltuner/switchyard/commit/603780c596399d7bcda3f83f845b4c7c3f1ba3f2))
+* validate PR titles as conventional commits ([#38](https://github.com/alltuner/switchyard/issues/38)) ([f27a69e](https://github.com/alltuner/switchyard/commit/f27a69ec08ada9a688e325981bfff51256a38328))
+
 ## [0.1.12](https://github.com/alltuner/switchyard/compare/v0.1.11...v0.1.12) (2026-04-07)
 
 
