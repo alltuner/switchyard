@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -340,7 +340,7 @@ wheels = [
 
 [[package]]
 name = "switchyard"
-version = "0.1.10"
+version = "0.1.13"
 source = { editable = "." }
 dependencies = [
     { name = "granian", extra = ["uvloop"] },
