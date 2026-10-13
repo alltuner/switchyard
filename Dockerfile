@@ -8,7 +8,7 @@ RUN uv sync --no-dev --frozen --no-install-project
 COPY src/ src/
 RUN uv sync --no-dev --frozen --no-editable
 
-FROM python:3.14-slim-bookworm
+FROM python:3.15-slim-bookworm
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
